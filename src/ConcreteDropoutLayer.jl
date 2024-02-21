@@ -77,9 +77,7 @@ Flux.@functor ConcreteDropout
 
 Flux.trainmode!(m::ConcreteDropout, mode=true) = (m.active = isnothing(Flux._tidy_active(mode)) ? nothing : mode; m)
 
-md"""
 ## Utilities
-"""
 
 similar_dropout(x, dims::Colon) = similar(x)
 similar_dropout(x, dims) = similar(x, ntuple(d -> d in dims ? size(x, d) : 1, ndims(x)))
@@ -101,9 +99,7 @@ Type piracy of the `Base.eps` function. Needed for `Flux.outputsize` to work.
   """
 Base.eps(::Type{Flux.NilNumber.Nil}) = 0
 
-md"""
 # Regularization
-"""
 
 pen_l2(x::AbstractArray) = sum(abs2, x)
 
