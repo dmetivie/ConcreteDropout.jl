@@ -1,6 +1,7 @@
+using Markdown
 
 md"""
-# MCDropout BNN for a regression task
+# Monte Carlo (Concrete) Dropout: Bayesian Neural Network (BNN) for a regression task
     
 From [https://github.com/aurelio-amerio/ConcreteDropout/blob/main/examples/Tensorflow/regression_MCDropout.ipynb](https://github.com/aurelio-amerio/ConcreteDropout/blob/main/examples/Tensorflow/regression_MCDropout.ipynb).
 For more information on this BNN implementation, see https://arxiv.org/pdf/1703.04977.pdf
@@ -10,10 +11,9 @@ using Flux
 using Flux.Optimise: update!
 using Random
 using StatsBase
-using Markdown
 using StatsPlots
-using ConcreteDropout
-using ConcreteDropout: Split
+using ConcreteDropoutLayer
+using ConcreteDropoutLayer: Split
 
 Random.seed!(MersenneTwister(1))
 
@@ -31,7 +31,7 @@ function gen_data(N; in=1, out=1)
 end
 
 md"""
-## Neural network
+## Neural network functions
 """
 
 function build_model_concrete_dropout(in, out)
@@ -51,25 +51,25 @@ function build_model_concrete_dropout(in, out)
     return Chain(DL_model, Split(est_mean, est_logvar)) |> f32
 end
 
-function build_model_dropout(in, D, pp)
+function build_model_dropout(in, out, p)
     DL_model = Chain(
         Dense(in => 100, relu),
         Dense(100 => 100),
-        Dropout(pp),
+        Dropout(p),
         relu,
         Dense(100 => 100),
-        Dropout(pp),
+        Dropout(p),
         relu
     )
 
-    est_mean = Chain(Dense(100 => out), Dropout(pp), relu)
-    est_logvar = Chain(Dense(100 => out), Dropout(pp), relu)
+    est_mean = Chain(Dense(100 => out), Dropout(p), relu)
+    est_logvar = Chain(Dense(100 => out), Dropout(p), relu)
 
     return Chain(DL_model, Split(est_mean, est_logvar)) |> f32
 end
 
 md"""
-## Loss
+## Loss functions
 """
 
 function heteroscedastic_loss(y_pred, y_true)
@@ -89,7 +89,7 @@ function simple_loss(model, x, y)
 end
 
 md"""
-## Training
+## Training functions
 """
 
 function train_step!(model, opt_state, xy, func_loss)
@@ -102,17 +102,22 @@ function train_step!(model, opt_state, xy, func_loss)
     return loss
 end
 
-function train!(model, opt, data, func_loss, x_test, y_test)
+"""
+    train!(model, opt, data, func_loss, x_test, y_test, epochs)
+Train the `model` and comute at each epoch the training and testing loss
+"""
+function train!(model, opt, data, func_loss, x_test, y_test, epochs)
     v_loss = Float32[]
     t_loss = Float32[]
     loss = rand(Float32) # just to define loss in outer loop scope # probably better ways to do that
     for epoch in 1:epochs
-        @info epoch
         for d in data
             loss = train_step!(model, opt, d, func_loss)
         end
+        test_loss = heteroscedastic_loss(model(x_test), y_test)
         append!(v_loss, loss)
-        append!(t_loss, heteroscedastic_loss(y_test, model(x_test)))
+        append!(t_loss, test_loss)
+        @info "Epoch $epoch train_loss = $(round(loss, digits = 4)) test_loss = $(round(test_loss, digits = 4))"
     end
     return v_loss, model, opt, t_loss
 end
@@ -143,12 +148,14 @@ md"""
 ## Dropout Model
 """
 
-model_d = build_model_dropout(in, out, 0.1)
+fix_dropout = 0.1
+model_d = build_model_dropout(Q, D, fix_dropout)
+
 md"""
 Initialise the optimiser for this model:
 """
 opt_state_d = Flux.setup(Adam(), model_d)
-v_loss_d, model_out_d, opt_out_d, t_loss_d = train!(model_d, opt_state_d, data, simple_loss, x_test, y_test)
+v_loss_d, model_out_d, opt_out_d, t_loss_d = train!(model_d, opt_state_d, data, simple_loss, x_test, y_test, epochs)
 
 md"""
 ## Concrete Dropout Model
@@ -160,10 +167,10 @@ Compute the regularisation values
 wr = get_weight_regularizer(n_train, l=1.0f-2, τ=1.0f0)
 dr = get_dropout_regularizer(n_train, τ=1.0f0, cross_entropy_loss=false)
 
-model = build_model_concrete_dropout(in, out)
+model = build_model_concrete_dropout(Q, D)
 opt_state = Flux.setup(Adam(), model)
 reg_loss(model, x, y) = full_loss(model, x, y; lw=wr, ld=dr)
-v_loss, model_out, opt_out, t_loss = train!(model, opt_state, data, reg_loss, x_test, y_test)
+v_loss, model_out, opt_out, t_loss = train!(model, opt_state, data, reg_loss, x_test, y_test, epochs)
 
 md"""
 # Result
@@ -173,14 +180,14 @@ md"""
 ## Training loss
 """
 begin
-    p_train = plot(v_loss_d, label="Dropout(0.1)", title="Train loss")
+    p_train = plot(v_loss_d, label="Dropout($fix_dropout)", title="Train loss")
     plot!(v_loss, label="ConcreteDropout")
     xlabel!("Epoch")
-    ylabel!("loss")
-    p_test = plot(t_loss_d, label="test Dropout(0.1)", title="Test loss")
+    ylabel!("loss", yscale = :log10)
+    p_test = plot(t_loss_d, label="test Dropout($fix_dropout)", title="Test loss")
     plot!(t_loss, label="test ConcreteDropout")
     xlabel!("Epoch")
-    ylabel!("loss")
+    ylabel!("loss", yscale = :log10)
     plot(p_train, p_test)
 end
 
@@ -188,20 +195,21 @@ md"""
 ## Monte Carlo predictions
 """
 
+#! only work with D = out = 1 as it is coded now
 """
-	MC_predict(model, X::AbstractArray{T}; n_samples=1000, kwargs...)
+MC_predict(model, X::AbstractArray{T}; n_samples=1000, kwargs...)
 For each X it returns `n_samples` monte carlo simulations where the randomness comes from the (Concrete)Dropout layers.
 """
-function MC_predict(model, X::AbstractArray; n_samples=1000, heteroscedastic = true, kwargs...)
-	dim_out = Flux.outputsize(model, size(X))[1]
-	D = heteroscedastic ? dim_out÷2 : dim_out
-	dim_N = ndims(X)
+function MC_predict(model, X::AbstractArray; n_samples=1000, heteroscedastic=true, kwargs...)
+    dim_out = Flux.outputsize(model, size(X))[1]
+    D = heteroscedastic ? dim_out ÷ 2 : dim_out
+    dim_N = ndims(X)
     mean_arr = zeros(D, size(X, dim_N))
     std_dev_arr = zeros(D, size(X, dim_N))
 
-    for (i, x) in enumerate(eachslice(X, dims = dim_N))
-        X_in = cat(fill(x, n_samples)..., dims = dim_N) |> format2Flux
-
+    for (i, x) in enumerate(eachslice(X, dims=dim_N))
+        X_in = cat(fill(x, n_samples)..., dims=dim_N) 
+        
         predictions = model(X_in)
         θs_MC = predictions[1:D, :]
         logvars = predictions[D+1:end, :]
@@ -227,8 +235,16 @@ begin
     x_sorted = x_test[argsort]'
     y_true_sorted = y_test[argsort]'
 
-    plot(x_sorted, y_true_sorted, label="true")
-    # plot!(x_sorted, y_pred_sorted, ribbon = 2std_sorted, label = "pred ± 2σ", alpha = 0.2)
-    plot!(x_sorted, y_pred_d[argsort]', ribbon=y_std_d[argsort]', label="pred ± σ D(0.1)", alpha=0.4)
-    plot!(x_sorted, y_pred[argsort]', ribbon=y_std[argsort]', label="pred ± σ CD", alpha=0.4)
+    plot(x_sorted, y_true_sorted, label="y_test", lw = 2)
+    plot!(x_sorted, y_pred_d[argsort]', ribbon=y_std_d[argsort]', label="ŷ ± σ Dropout(0.1)", alpha=0.4, lw = 1.5)
+    plot!(x_sorted, y_pred[argsort]', ribbon=y_std[argsort]', label="ŷ ± σ ConcreteDropout", alpha=0.4, lw = 1.5)
+end
+
+md"""
+Print all learned Dropout rates.
+"""
+for layer in [model_out[1]...; model_out[2][1]...; model_out[2][2]...]
+    if layer isa ConcreteDropout
+        println(layer)
+    end
 end

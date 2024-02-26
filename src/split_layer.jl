@@ -28,5 +28,6 @@ Split(paths...) = Split(paths)
 
 Flux.@functor Split
 
-(m::Split)(x::AbstractArray) = vcat(map(f -> f(x), m.paths)...) # I added the vcat for convernience for this specific example where the two scalara output are brought togeter in a vector..
+# I added the vcat for convernience, this assume that outputs have the same 2nd dim.
+(m::Split)(x::AbstractArray) = vcat(map(f -> f(x), m.paths)...) 
 Base.getindex(Split, i) = Split.paths[i]

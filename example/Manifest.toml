@@ -2,7 +2,7 @@
 
 julia_version = "1.10.1"
 manifest_format = "2.0"
-project_hash = "a4f6b338743431833fe698798ee2942e4ac870a9"
+project_hash = "9519baa1cb1a2386221e5612454c5d0721d9ec36"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -174,6 +174,14 @@ version = "0.1.2"
 
     [deps.CompositionsBase.weakdeps]
     InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
+
+[[deps.ConcreteDropoutLayer]]
+deps = ["Flux", "Random"]
+git-tree-sha1 = "f1318fd21d5e2440cb575aa2a6b9f95f2247ce9a"
+repo-rev = "main"
+repo-url = "https://github.com/dmetivie/ConcreteDropoutLayer.jl"
+uuid = "cefad46e-21aa-447d-abc5-91039c0799ef"
+version = "0.0.0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]

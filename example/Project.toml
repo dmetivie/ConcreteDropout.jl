@@ -1,4 +1,5 @@
 [deps]
+ConcreteDropoutLayer = "cefad46e-21aa-447d-abc5-91039c0799ef"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
