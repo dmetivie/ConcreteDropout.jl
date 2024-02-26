@@ -57,7 +57,7 @@ function compute_relaxation(x, p, ϵ, T)
 end
 
 """
-concrete_dropout(rng, x, p; ϵ=eps(eltype(x)), temperature=eltype(x)(0.1), dims=:)
+  concrete_dropout(rng, x, p; ϵ=eps(eltype(x)), temperature=eltype(x)(0.1), dims=:)
 Apply a ConcreteDropout mask to array `x` i.e. each `dims` of `x` is mutliply by a random number in [0,1].
 """
 function concrete_dropout(rng, x, p; ϵ=eps(eltype(x)), temperature=eltype(x)(0.1), dims=:)
@@ -75,8 +75,7 @@ end
 
 Flux.@functor ConcreteDropout
 
-Flux.trainmode!(m::ConcreteDropout, mode=true) = (m.active = isnothing(Flux._tidy_active(mode)) ? nothing : mode; m)
-
+Flux.testmode!(m::ConcreteDropout, mode=true) = (m.active = isnothing(Flux._tidy_active(mode)) ? nothing : !mode; m)
 ## Utilities
 
 similar_dropout(x, dims::Colon) = similar(x)
