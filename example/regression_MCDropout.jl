@@ -122,7 +122,6 @@ function train!(model, opt, data, func_loss, x_test, y_test, epochs)
     return v_loss, model, opt, t_loss
 end
 
-
 md"""
 # Data & Settings
 """
@@ -130,7 +129,7 @@ md"""
 Q = 1
 D = 1
 n_train = 1000
-n_test = 1000
+n_test = 500
 
 x_train, y_train = gen_data(n_train, in=Q, out=D)
 
@@ -195,21 +194,24 @@ md"""
 ## Monte Carlo predictions
 """
 
-#! only work with D = out = 1 as it is coded now
+##! only work with D = out = 1 as it is coded now
 """
 MC_predict(model, X::AbstractArray{T}; n_samples=1000, kwargs...)
 For each X it returns `n_samples` monte carlo simulations where the randomness comes from the (Concrete)Dropout layers.
 """
 function MC_predict(model, X::AbstractArray; n_samples=1000, heteroscedastic=true, kwargs...)
+    Flux.testmode!(model, false) # (Concrete)Dropout will be active during predictions => Monte Carlo (Concrete)Dropout
     dim_out = Flux.outputsize(model, size(X))[1]
     D = heteroscedastic ? dim_out ÷ 2 : dim_out
     dim_N = ndims(X)
     mean_arr = zeros(D, size(X, dim_N))
     std_dev_arr = zeros(D, size(X, dim_N))
 
-    for (i, x) in enumerate(eachslice(X, dims=dim_N))
-        X_in = cat(fill(x, n_samples)..., dims=dim_N) 
-        
+    X_in = similar(X, size(X)[1:end-1]..., n_samples)
+
+    for (i, x) in enumerate(eachslice(X, dims=dim_N, drop = false))
+        X_in[:] .= x
+    
         predictions = model(X_in)
         θs_MC = predictions[1:D, :]
         logvars = predictions[D+1:end, :]
@@ -224,12 +226,16 @@ function MC_predict(model, X::AbstractArray; n_samples=1000, heteroscedastic=tru
         mean_arr[:, i] .= θ_hat
         std_dev_arr[:, i] .= std_dev
     end
+    Flux.testmode!(model) # turn back to default mode
     return mean_arr, std_dev_arr
 end
 
 y_pred, y_std = MC_predict(model_out, x_test)
 y_pred_d, y_std_d = MC_predict(model_out_d, x_test)
 
+md"""
+Plot prediction plus standard deviation (aleatoric + epistemic)
+"""
 begin
     argsort = sortperm(x_test, dims=2)
     x_sorted = x_test[argsort]'
