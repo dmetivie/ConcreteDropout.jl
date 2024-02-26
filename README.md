@@ -12,7 +12,7 @@ Add this module as any unregistered Julia package
 
 ```julia
 import Pkg
-Pkg.add("https://github.com/dmetivie/ConcreteDropoutLayer.jl")
+Pkg.add(url="https://github.com/dmetivie/ConcreteDropoutLayer.jl", rev="master") 
 ```
 
 ### Adding a Concrete Dropout layer
