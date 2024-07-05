@@ -1,4 +1,4 @@
-using Markdown
+using Markdown#hide
 
 md"""
 # Monte Carlo (Concrete) Dropout: Bayesian Neural Network (BNN) for a regression task
