@@ -1,5 +1,7 @@
 module ConcreteDropoutLayerLuxExt
 
+using ConcreteDropoutLayer
+using Random
 using Lux
 using LuxLib: _dropout_fptype, _dropout_shape
 using LuxCore: replicate

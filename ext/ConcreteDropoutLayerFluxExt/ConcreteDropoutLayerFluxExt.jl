@@ -1,5 +1,7 @@
 module ConcreteDropoutLayerFluxExt
 
+using ConcreteDropoutLayer
+using Random
 using Flux
 
 """
