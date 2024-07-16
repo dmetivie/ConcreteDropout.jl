@@ -15,6 +15,7 @@ using StatsPlots
 using ConcreteDropoutLayer
 using ConcreteDropoutLayer: Split
 
+
 Random.seed!(MersenneTwister(1))
 
 md"""

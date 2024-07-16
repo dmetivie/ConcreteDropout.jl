@@ -1,10 +1,8 @@
-module ConcreteDropoutLayerLuxExt
-
-using ConcreteDropoutLayer
-using Random
+# module ConcreteDropoutLayerLuxExt
 using Lux
-using LuxLib: _dropout_fptype, _dropout_shape
-using LuxCore: replicate
+using Random
+using Lux.LuxLib: _dropout_fptype, _dropout_shape
+using Lux.LuxCore: replicate
 
 """
     ConcreteDropout(; dims=:)
@@ -70,7 +68,7 @@ function (d::ConcreteDropout)(x, ps, st::NamedTuple)
     return y, merge(st, (; rng))
 end
 
-function Base.show(io::IO, d::Dropout)
+function Base.show(io::IO, d::ConcreteDropout)
     print(io, "ConcreteDropout(")
     d.dims != Colon() && print(io, ", dims=", d.dims)
     return print(io, ")")
@@ -147,4 +145,5 @@ Relaxation term used as a soft mask in Concete Dropout (z in Eq. 5 of the [paper
 """
 _concretedropout_kernel(x, p, ϵ, temperature) = 1 - sigmoid((log(p + ϵ) - log1p(ϵ - p) + log(x + ϵ) - log1p(ϵ - x)) / temperature)
 
-end
+# export ConcreteDropout
+# end

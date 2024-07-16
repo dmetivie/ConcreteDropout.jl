@@ -145,9 +145,11 @@ function get_dropout_regularizer(N; τ=1.0f-1, cross_entropy_loss=false)
     return reg
 end
 
-export ConcreteDropout
-export add_CD_regularization, get_weight_regularizer, get_dropout_regularizer
 
 include("split_layer.jl")
+
+# export ConcreteDropout
+# export add_CD_regularization, get_weight_regularizer, get_dropout_regularizer
+# export Split
 
 end

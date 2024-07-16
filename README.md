@@ -4,6 +4,10 @@ Implementation of the [Concrete Dropout layer](https://arxiv.org/pdf/1705.07832.
 
 The notebook example [regression_MCDropout.ipynb](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/regression_MCDropout.ipynb) showcases the usage of Concrete Dropout layers in the context of Bayesian Neural Networks (see [this paper](https://arxiv.org/pdf/1703.04977.pdf)).
 
+**Warning**: I try to use Package extansion to have a version for Flux or Lux depending on which you load. Unfortunately, it was not as easy as I thought e.g. [this PR](https://github.com/JuliaLang/Pkg.jl/pull/3552/files#diff-1af5f877eb4497fc1f22daf47044d0958aa02ab39cc6da8ef052624870d75d28) and a lot of related question on Discourse. I am not sure what I was aiming for is currently possible easily.
+
+For Flux version, I believe version v0.0.0 should work.
+
 ## Usage
 
 ### Download

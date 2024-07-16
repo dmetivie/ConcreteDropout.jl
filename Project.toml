@@ -1,21 +1,11 @@
 name = "ConcreteDropoutLayer"
 uuid = "cefad46e-21aa-447d-abc5-91039c0799ef"
 authors = ["David Métivier <david.metivier@inrae.fr> and contributors"]
-version = "0.0.4"
+version = "0.0.5"
 
 [deps]
-
-[weakdeps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
-LuxCore = "bb33d45b-7691-41d6-9220-0943567d0623"
-LuxLib = "82251201-b29d-42c6-8e01-566dec8acb11"
-
-[extensions]
-ConcreteDropoutLayerFluxExt = ["Flux", "Random"]
-ConcreteDropoutLayerLuxExt = ["Lux", "LuxLib", "LuxCore"]
 
 [compat]
-Flux = "0.14"
 julia = "1"
