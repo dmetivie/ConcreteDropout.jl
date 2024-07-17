@@ -1,23 +1,49 @@
 # Concrete Dropout in Julia
 
-Implementation of the [Concrete Dropout layer](https://arxiv.org/pdf/1705.07832.pdf) by Y. Gal et al. in Julia with the Deep Learning package [Flux.jl](https://fluxml.ai/).
+Implementation of the [Concrete Dropout layer](https://arxiv.org/pdf/1705.07832.pdf) by Y. Gal et al. in Julia with the Deep Learning package [Flux.jl](https://fluxml.ai/) and [Lux.jl](https://lux.csail.mit.edu/stable/).
 
-The notebook example [regression_MCDropout.ipynb](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/regression_MCDropout.ipynb) showcases the usage of Concrete Dropout layers in the context of Bayesian Neural Networks (see [this paper](https://arxiv.org/pdf/1703.04977.pdf)).
+The notebook example [`regression_MCDropout_Flux.ipynb`](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/Flux/regression_MCDropout_Flux.ipynb) showcases the usage of Concrete Dropout layers in the context of Bayesian Neural Networks (see [this paper](https://arxiv.org/pdf/1703.04977.pdf)).
 
-**Warning**: I try to use Package extansion to have a version for Flux or Lux depending on which you load. Unfortunately, it was not as easy as I thought e.g. [this PR](https://github.com/JuliaLang/Pkg.jl/pull/3552/files#diff-1af5f877eb4497fc1f22daf47044d0958aa02ab39cc6da8ef052624870d75d28) and a lot of related question on Discourse. I am not sure what I was aiming for is currently possible easily.
+**Warning**: I tried to use Package extension to have a version for Flux or Lux depending on which you load. Unfortunately, it was not as easy as I thought e.g. [this PR](https://github.com/JuliaLang/Pkg.jl/pull/3552/files#diff-1af5f877eb4497fc1f22daf47044d0958aa02ab39cc6da8ef052624870d75d28) and a lot of related question on Discourse. I am not sure what I was aiming for is currently possible easily.
 
-For Flux version, I believe version v0.0.0 should work.
+For Flux version, the initial version v0.0.0 should work.
+For Lux please use the latest version.
 
-## Usage
+## Download
 
-### Download
-
-Add this module as any unregistered Julia package
+Add this module as an unregistered Julia package or via my local registry
 
 ```julia
 import Pkg
-Pkg.add(url="https://github.com/dmetivie/ConcreteDropoutLayer.jl") 
+Pkg.add(url="https://github.com/dmetivie/ConcreteDropoutLayer.jl") # master branch
+# or
+using LocalRegistry
+Pkg.pkg"registry add https://github.com/dmetivie/LocalRegistry"
+Pkg.add("ConcreteDropoutLayer.jl") # you can select the version depending on what Flux/Lux you want
 ```
+
+## Lux usage
+
+```julia
+using Lux, Random
+using ConcreteDropoutLayer
+
+channel = 10
+
+model = Chain(
+        Conv((3,), channel => 64, relu),
+        ConcreteDropout(; dims=(2, 3)), # ConcreteDropout for Conv1D layer
+        FlattenLayer(),
+        Dense(6272 => 100, relu),
+        ConcreteDropout(), # ConcreteDropout for Dense layer
+    )
+```
+
+See the notebook for example usage.
+
+## Flux Usage
+
+On version `v0.0.0` of the package only for now!
 
 ### Adding a Concrete Dropout layer
 
@@ -79,10 +105,9 @@ Here is a reminder of the typical `dims` setting depending on the type of previo
 - Clean regularization
   - Ideally, the L2 term should directly be in the optimizer with something like `OptimiserChain(WeightDecay(lw/(1-p)), Adam(0.1))`.
 And at each time step, the value of `p` is `adjust!`. Or maybe with another normalization, one could get rid of the `1/(1-p)`.
-  - The entropy and L2 regularization are handled automatically, i.e., all relevant layers (nested or not) are found quickly and adjusted at every step.
-- Implementation in [Lux.jl](https://lux.csail.mit.edu/) ?
+  - The entropy and L2 regularization are handled automatically, i.e., all relevant layers (nested or not) are found quickly and adjusted at every step. (Done for Lux)
 
 ## Acknowledgments
 
 This code is inspired by the Python (tensorflow/pytorch) implementations of [@aurelio-amerio](https://github.com/aurelio-amerio), see [his module](https://github.com/aurelio-amerio/ConcreteDropout).
-Thanks to [@ToucheSir](https://github.com/ToucheSir) for some useful comments.
+Thanks to [@ToucheSir](https://github.com/ToucheSir) for some useful comments on the Flux version.
