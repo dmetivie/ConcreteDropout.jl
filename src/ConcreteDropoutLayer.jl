@@ -25,8 +25,29 @@ module ConcreteDropoutLayer
     
 #     ConcreteDropout = extLux.ConcreteDropout
 # end
+
+get_weight_regularizer(N; l=1.0f-2, τ=1.0f-1) = l^2 / (τ * N)
+
+function get_dropout_regularizer(N; τ=1.0f-1, cross_entropy_loss=false)
+    reg = 1 / (τ * N)
+    if !cross_entropy_loss
+        reg *= 2
+    end
+    return reg
+end
+
+"""
+Entropy of Bernoulli random variable with proba p
+"""
+entropy_Bernoulli(p) = p * log(p) + (1 - p) * log1p(-p)
+
+
+export get_weight_regularizer, get_dropout_regularizer
+
+
 include("../ext/ConcreteDropoutLayerLuxExt/ConcreteDropoutLayerLuxExt.jl")
 
 export ConcreteDropout
+
 
 end

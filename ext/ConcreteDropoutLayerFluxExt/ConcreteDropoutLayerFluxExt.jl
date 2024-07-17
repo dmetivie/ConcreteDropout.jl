@@ -80,8 +80,7 @@ Flux.testmode!(m::ConcreteDropout, mode=true) = (m.active = isnothing(Flux._tidy
 
 similar_dropout(x, dims::Colon) = similar(x)
 similar_dropout(x, dims) = similar(x, ntuple(d -> d in dims ? size(x, d) : 1, ndims(x)))
-input_feature(layer::Dense) = size(layer.weight, 2)
-input_feature(layer::Conv) = size(layer.weight, ndims(layer.weight) - 1)
+
 
 function Base.show(io::IO, d::ConcreteDropout)
     print(io, "ConcreteDropout(", round(sigmoid(d.p_logit)[1], digits=4))
@@ -98,14 +97,13 @@ Type piracy of the `Base.eps` function. Needed for `Flux.outputsize` to work.
   """
 Base.eps(::Type{Flux.NilNumber.Nil}) = 0
 
+input_feature(layer::Dense) = size(layer.weight, 2)
+input_feature(layer::Conv) = size(layer.weight, ndims(layer.weight) - 1)
+
 # Regularization
 
 pen_l2(x::AbstractArray) = sum(abs2, x)
 
-"""
-Entropy of Bernoulli random variable with proba p
-"""
-entropy_Bernoulli(p) = p * log(p) + (1 - p) * log1p(-p)
 
 """
 Compute the (differentiable) regularization terms needed for layers where ConcreteDropout is applied.
@@ -134,17 +132,6 @@ function add_CD_regularization(layer, cd_layer::ConcreteDropout, lw, ld)
     dropout_regularizer = ld * K * entropy_Bernoulli(p)
     return weights_regularizer + dropout_regularizer
 end
-
-get_weight_regularizer(N; l=1.0f-2, τ=1.0f-1) = l^2 / (τ * N)
-
-function get_dropout_regularizer(N; τ=1.0f-1, cross_entropy_loss=false)
-    reg = 1 / (τ * N)
-    if !cross_entropy_loss
-        reg *= 2
-    end
-    return reg
-end
-
 
 include("split_layer.jl")
 

@@ -145,5 +145,97 @@ Relaxation term used as a soft mask in Concete Dropout (z in Eq. 5 of the [paper
 """
 _concretedropout_kernel(x, p, ϵ, temperature) = 1 - sigmoid((log(p + ϵ) - log1p(ϵ - p) + log(x + ϵ) - log1p(ϵ - x)) / temperature)
 
-# export ConcreteDropout
+#* # Regularization 
+
+#* ## Get regularization terms #TODO: better way to do this? Integrate L2 term inside Optimizer?
+
+function get_regularization(model_state)
+  p_cd, w_cd, K_cd = names_of_layer_to_reg(model_state)
+  return get_regularization(model_state.parameters, p_cd, w_cd)
+end
+
+function get_regularization(ps, p_cd, w_cd)
+  rates = [sigmoid(getproperty(ps, p)[1]) for p in p_cd]
+
+  W = [getproperty(ps, w) for w in w_cd]
+
+  return rates, W
+end
+
+"""
+  names_of_layer_to_reg(model_state)
+Brut force extract the name of all layers/parameters involved in ConcreteDropout. 
+
+```julia
+p_cd, w_cd = names_of_layer_to_reg(model_state)
+eval(Meta.parse(w_cd[1])) # return a weigth matrix
+``` 
+"""
+function names_of_layer_to_reg(model_state::Lux.Experimental.TrainState)
+  return names_of_layer_to_reg(model_state.model, model_state.parameters, model_state.states)
+end
+
+function names_of_layer_to_reg(model, ps, st)
+  CD_layer_names = String[]
+  function print_p_CD(l, ps, st, name)
+      if l isa ConcreteDropout
+          push!(CD_layer_names, name)
+      end
+      return l, ps, st
+  end
+
+  Lux.Experimental.@layer_map print_p_CD model ps st
+  CD_ps_names = replace.(CD_layer_names, "model." => "")
+  CD_ps_names = replace.(CD_ps_names, "layers." => "")
+
+  CD_ps_nb = [parse(Int,a[end]) - 1 for a in CD_ps_names]
+  W_ps_names = [string(a[1:end-1], CD_ps_nb[i]) for (i,a) in enumerate(CD_ps_names)]
+  CD_ps_names = [(string(a, ".p_logit")) for a in CD_ps_names]
+  W_ps_names = [(string(a, ".weight")) for a in W_ps_names]
+
+  w_cd = Meta.parse.(W_ps_names)
+
+  return Meta.parse.(CD_ps_names), w_cd, [input_feature(getproperty(ps, w)) for w in w_cd]
+end
+"""
+    getproperty(object, nested_name::Expr)
+
+Call getproperty recursively on `object` to extract the value of some
+nested property, as in the following example:
+
+    julia> object = (X = (x = 1, y = 2), Y = 3)
+    julia> getproperty(object, :(X.y))
+    2
+[Code from Anthony Blaom on discourse](https://discourse.julialang.org/t/nested-getproperty-requests/27968)
+"""
+function Base.getproperty(obj, ex::Expr)
+    subex, field = reduce_nested_field(ex)
+    return getproperty(getproperty(obj, subex), field)
+end
+
+# applying the following to `:(a.b.c)` returns `(:(a.b), :c)`
+function reduce_nested_field(ex)
+    ex.head == :. || throw(ArgumentError)
+    tail = ex.args[2]
+    tail isa QuoteNode || throw(ArgumentError)
+    field = tail.value
+    field isa Symbol || throw(ArgmentError)
+    subex = ex.args[1]
+    return (subex, field)
+end
+
+#* ## Compute actual reg
+input_feature(W::AbstractArray) = ndims(W) == 2 ? size(W, 2) : size(W, ndims(W) - 1)
+input_feature(layer::Dense) = size(layer.weight, 2)
+input_feature(layer::Conv) = size(layer.weight, ndims(layer.weight) - 1)
+
+"""
+  Add the regularization term 
+"""
+function computeCD_reg(p, W, K, λp, λW)
+  sum(λW*sum(abs2, W[i])/(1-p[i]) + λp*K[i]*entropy_Bernoulli(p[i]) for i in eachindex(p))
+end
+
+export names_of_layer_to_reg, getproperty
+export computeCD_reg
 # end

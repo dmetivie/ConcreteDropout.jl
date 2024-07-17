@@ -68,13 +68,24 @@ md"""
 function heteroscedastic_loss(y_pred, y_true)
     μ, log_var = y_pred
     precision = exp.(-log_var)
-    return mean(precision .* (y_true - μ) .^ 2 + log_var)
+    return sum(precision .* (y_true - μ) .^ 2 + log_var)
 end
 
 function compute_loss_heteroscedastic(model, ps, st, (x, y))
     # Generate the model predictions.
-    ŷ, st = model((x), ps, st)
+    ŷ, st = model(x, ps, st)
     return heteroscedastic_loss(ŷ, y), st, ()
+end
+
+md"""
+Version with the added regularization suggested in the original paper. `(names_CD, names_W, input_features), λp, λW` are provided and constant during the training.
+"""
+function compute_loss_heteroscedastic_w_reg(model, ps, st, (x, y), (names_CD, names_W, input_features), λp, λW)
+    # Generate the model predictions.
+    ŷ, st = model(x, ps, st)
+    drop_rates, W = get_regularization(ps, names_CD, names_W)
+
+    return heteroscedastic_loss(ŷ, y) + computeCD_reg(drop_rates, W, input_features, λp, λW), st, ()
 end
 
 md"""
@@ -96,10 +107,10 @@ end
 
 
 """
-	train(model, epochs, dataset, dataset_test; learning_rate=0.001f0, dev = cpu_device())
+	train(model, epochs, dataset, dataset_val, compute_loss; learning_rate=0.001f0, dev = cpu_device())
 Train the `model` and comute at each epoch the training and testing loss
 """
-function train(model, epochs, dataset, dataset_val; learning_rate=0.001f0, dev = cpu_device())
+function train(model, epochs, dataset, dataset_val, compute_loss; learning_rate=0.001f0, dev = cpu_device())
     ## Set up models
     rng = Xoshiro(0)
 
@@ -112,8 +123,8 @@ function train(model, epochs, dataset, dataset_val; learning_rate=0.001f0, dev =
 
     ## Validation Loss
     losses_train = Float32[]
-    x_val, y_val = dataset_val
-    losses_val = Float32[heteroscedastic_loss(first(model(x_val, ps, st)), y_val)]
+    x_val, y_val = dataset_val |> dev
+    losses_val = Float32[first(compute_loss(model, ps, st, (x_val, y_val)))]
     loss = rand(Float32) # just to define loss in outer loop scope # probably better ways to do that
     best_test_state = train_state
 
@@ -121,11 +132,11 @@ function train(model, epochs, dataset, dataset_val; learning_rate=0.001f0, dev =
         issave = false
         for xy in dataset
             xy = xy |> dev
-            loss, train_state = train_step(train_state, xy, compute_loss_heteroscedastic)
+            loss, train_state = train_step(train_state, xy, compute_loss)
         end
         ps = train_state.parameters
         st = train_state.states
-        loss_val = heteroscedastic_loss(first(model(x_val, ps, st)), y_val)
+        loss_val = first(compute_loss(model, ps, st, (x_val, y_val)))
         if loss_val < minimum(losses_val)
             best_test_state = train_state
             issave = true
@@ -137,7 +148,6 @@ function train(model, epochs, dataset, dataset_val; learning_rate=0.001f0, dev =
     return best_test_state, losses_train, losses_val
 end
 
-
 md"""
 # Data & Settings
 """
@@ -145,7 +155,7 @@ md"""
 Q = 1
 D = 1
 n_train = 1000
-n_test = 500
+n_test = 100
 
 dev = cpu_device()
 
@@ -167,19 +177,35 @@ md"""
 """
 
 fix_dropout = 0.1
-
-md"""
-Initialise the optimiser for this model:
-"""
 model_CNN_D = build_model_dropout(Q, D, fix_dropout)
-@time "Dropout model" model_state_out_D, loss_train_D, loss_val_D = train(model_CNN_D, epochs, data_train, data_test, dev = gpu_device())
+
+#--------------------
+
+@time "Dropout model" model_state_out_D, loss_train_D, loss_val_D = train(model_CNN_D, epochs, data_train, data_test, compute_loss_heteroscedastic; dev = gpu_device())
 
 md"""
 ## Concrete Dropout Model
 """
 
+md"""
+### Without regularization
+"""
+
 model_CNN_CD = build_model_dropout(Q, D)
-@time "Concrete Dropout model" model_state_out_CD, loss_train_CD, loss_val_CD = train(model_CNN_CD, epochs, data_train, data_test, dev = gpu_device())
+#---------------------
+
+@time "Concrete Dropout model" model_state_out_CD, loss_train_CD, loss_val_CD = train(model_CNN_CD, epochs, data_train, data_test, compute_loss_heteroscedastic; dev = gpu_device())
+
+md"""
+### With regularization
+"""
+
+wr = get_weight_regularizer(n_train, l=1.0f-2, τ=1.0f0)
+dr = get_dropout_regularizer(n_train, τ=1.0f0, cross_entropy_loss=false)
+
+#------------
+p_cd, w_cd, KK = names_of_layer_to_reg(Lux.Experimental.TrainState(Xoshiro(0), model_CNN_CD, Adam(0.1f0); transform_variables=dev))
+@time "Concrete Dropout model reg" model_state_out_CD_reg, loss_train_CD_reg, loss_val_CD_reg = train(model_CNN_CD, epochs, data_train, data_test, (model, ps, st, xy) -> compute_loss_heteroscedastic_w_reg(model, ps, st, xy, (p_cd, w_cd, KK), dr, wr); dev = gpu_device())
 
 md"""
 # Result
@@ -191,10 +217,12 @@ md"""
 begin
     p_train = plot(loss_train_D, label="Dropout($fix_dropout)", title="Train loss")
     plot!(loss_train_CD, label="ConcreteDropout")
+    plot!(loss_train_CD_reg, label="ConcreteDropout + reg")
     xlabel!("Epoch")
     ylabel!("loss", yscale = :log10)
     p_test = plot(loss_val_D, label="test Dropout($fix_dropout)", title="Test loss")
     plot!(loss_val_CD, label="test ConcreteDropout")
+    plot!(loss_val_CD_reg, label="test ConcreteDropout + reg")    
     xlabel!("Epoch")
     ylabel!("loss", yscale = :log10)
     plot(p_train, p_test)
@@ -241,7 +269,7 @@ function MC_predict(model_state, X::AbstractArray, n_samples=1000; dev = gpu_dev
     return mean_arr, std_dev_arr
 end
 
-y_pred, y_std = MC_predict(model_state_out_CD, x_test, dev = cpu_device(), dim_out = D)
+y_pred, y_std = MC_predict(model_state_out_CD_reg, x_test, dev = cpu_device(), dim_out = D)
 y_pred_d, y_std_d = MC_predict(model_state_out_D, x_test, dev = cpu_device(), dim_out = D)
 
 md"""
@@ -266,5 +294,4 @@ function print_p_CD(l, ps, st, name)
     end
     return l, ps, st
 end;
-
 Lux.Experimental.@layer_map print_p_CD model_state_out_CD.model model_state_out_CD.parameters model_state_out_CD.parameters;
