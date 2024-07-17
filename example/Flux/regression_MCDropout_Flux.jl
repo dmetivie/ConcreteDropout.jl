@@ -12,7 +12,7 @@ using Flux.Optimise: update!
 using Random
 using StatsBase
 using StatsPlots
-using ConcreteDropoutLayer
+using ConcreteDropoutLayer # v0.0.0
 using ConcreteDropoutLayer: Split
 
 
