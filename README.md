@@ -2,7 +2,7 @@
 
 Implementation of the [Concrete Dropout layer](https://arxiv.org/pdf/1705.07832.pdf) by Y. Gal et al. in Julia with the Deep Learning package [Flux.jl](https://fluxml.ai/) and [Lux.jl](https://lux.csail.mit.edu/stable/).
 
-The notebook example [`regression_MCDropout_Flux.ipynb`](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/Flux/regression_MCDropout_Flux.ipynb) showcases the usage of Concrete Dropout layers in the context of Bayesian Neural Networks (see [this paper](https://arxiv.org/pdf/1703.04977.pdf)).
+The notebook example [regression_MCDropout_Lux.ipynb](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/Lux/regression_MCDropout_Lux.ipynb) or  [`regression_MCDropout_Flux.ipynb`](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/Flux/regression_MCDropout_Flux.ipynb) showcases the usage of Concrete Dropout layers in the context of Bayesian Neural Networks (see [this paper](https://arxiv.org/pdf/1703.04977.pdf)).
 
 **Warning**: I tried to use Package extension to have a version for Flux or Lux depending on which you load. Unfortunately, it was not as easy as I thought e.g. [this PR](https://github.com/JuliaLang/Pkg.jl/pull/3552/files#diff-1af5f877eb4497fc1f22daf47044d0958aa02ab39cc6da8ef052624870d75d28) and a lot of related question on Discourse. I am not sure what I was aiming for is currently possible easily.
 
@@ -39,7 +39,7 @@ model = Chain(
     )
 ```
 
-See the notebook for example usage.
+See the [notebook](https://github.com/dmetivie/ConcreteDropout.jl/blob/main/example/Lux/regression_MCDropout_Lux.ipynb) for a complete example.
 
 ## Flux Usage
 

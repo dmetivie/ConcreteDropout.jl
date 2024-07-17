@@ -150,7 +150,7 @@ _concretedropout_kernel(x, p, ϵ, temperature) = 1 - sigmoid((log(p + ϵ) - log1
 #* ## Get regularization terms #TODO: better way to do this? Integrate L2 term inside Optimizer?
 
 function get_regularization(model_state)
-  p_cd, w_cd, K_cd = names_of_layer_to_reg(model_state)
+  p_cd, w_cd, K_cd = regularization_infos(model_state)
   return get_regularization(model_state.parameters, p_cd, w_cd)
 end
 
@@ -163,19 +163,19 @@ function get_regularization(ps, p_cd, w_cd)
 end
 
 """
-  names_of_layer_to_reg(model_state)
+  regularization_infos(model_state)
 Brut force extract the name of all layers/parameters involved in ConcreteDropout. 
 
 ```julia
-p_cd, w_cd = names_of_layer_to_reg(model_state)
+p_cd, w_cd = regularization_infos(model_state)
 eval(Meta.parse(w_cd[1])) # return a weigth matrix
 ``` 
 """
-function names_of_layer_to_reg(model_state::Lux.Experimental.TrainState)
-  return names_of_layer_to_reg(model_state.model, model_state.parameters, model_state.states)
+function regularization_infos(model_state::Lux.Experimental.TrainState)
+  return regularization_infos(model_state.model, model_state.parameters, model_state.states)
 end
 
-function names_of_layer_to_reg(model, ps, st)
+function regularization_infos(model, ps, st)
   CD_layer_names = String[]
   function print_p_CD(l, ps, st, name)
       if l isa ConcreteDropout
@@ -236,6 +236,6 @@ function computeCD_reg(p, W, K, λp, λW)
   sum(λW*sum(abs2, W[i])/(1-p[i]) + λp*K[i]*entropy_Bernoulli(p[i]) for i in eachindex(p))
 end
 
-export names_of_layer_to_reg, getproperty
+export regularization_infos, getproperty, get_regularization
 export computeCD_reg
 # end

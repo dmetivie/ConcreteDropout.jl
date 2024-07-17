@@ -153,7 +153,7 @@ md"""
 Q = 1
 D = 1
 n_train = 1000
-n_test = 100
+n_test = 500
 
 dev = cpu_device()
 
@@ -202,7 +202,7 @@ wr = get_weight_regularizer(n_train, l=1.0f-2, τ=1.0f0)
 dr = get_dropout_regularizer(n_train, τ=1.0f0, cross_entropy_loss=false)
 
 #------------
-p_cd, w_cd, KK = names_of_layer_to_reg(Lux.Experimental.TrainState(Xoshiro(0), model_CNN_CD, Adam(0.1f0); transform_variables=dev))
+p_cd, w_cd, KK = regularization_infos(Lux.Experimental.TrainState(Xoshiro(0), model_CNN_CD, Adam(0.1f0); transform_variables=dev))
 @time "Concrete Dropout model reg" model_state_out_CD_reg, loss_train_CD_reg, loss_val_CD_reg = train(model_CNN_CD, epochs, data_train, data_test, (model, ps, st, xy) -> compute_loss_heteroscedastic_w_reg(model, ps, st, xy, (p_cd, w_cd, KK), dr, wr); dev = gpu_device())
 
 md"""
