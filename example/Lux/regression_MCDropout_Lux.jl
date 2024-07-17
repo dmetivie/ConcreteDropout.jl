@@ -72,7 +72,6 @@ function heteroscedastic_loss(y_pred, y_true)
 end
 
 function compute_loss_heteroscedastic(model, ps, st, (x, y))
-    # Generate the model predictions.
     ŷ, st = model(x, ps, st)
     return heteroscedastic_loss(ŷ, y), st, ()
 end
@@ -81,7 +80,6 @@ md"""
 Version with the added regularization suggested in the original paper. `(names_CD, names_W, input_features), λp, λW` are provided and constant during the training.
 """
 function compute_loss_heteroscedastic_w_reg(model, ps, st, (x, y), (names_CD, names_W, input_features), λp, λW)
-    # Generate the model predictions.
     ŷ, st = model(x, ps, st)
     drop_rates, W = get_regularization(ps, names_CD, names_W)
 
@@ -116,7 +114,6 @@ function train(model, epochs, dataset, dataset_val, compute_loss; learning_rate=
 
     train_state = Lux.Experimental.TrainState(rng, model, Adam(learning_rate); transform_variables=dev)
 
-    # return train(train_state, epochs, dataset, dataset_test; dev = dev)
     ps = train_state.parameters
     st = train_state.states
     model = train_state.model
@@ -128,6 +125,7 @@ function train(model, epochs, dataset, dataset_val, compute_loss; learning_rate=
     loss = rand(Float32) # just to define loss in outer loop scope # probably better ways to do that
     best_test_state = train_state
 
+    ## Training loop
     for epoch in 1:epochs
         issave = false
         for xy in dataset
