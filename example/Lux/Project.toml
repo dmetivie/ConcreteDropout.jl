@@ -1,6 +1,7 @@
 [deps]
 ConcreteDropoutLayer = "cefad46e-21aa-447d-abc5-91039c0799ef"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+LuxCUDA = "d0bbae9a-e099-4d5b-a835-1c6931763bda"
 MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Optimisers = "3bd65402-5787-11e9-1adc-39752487f4e2"

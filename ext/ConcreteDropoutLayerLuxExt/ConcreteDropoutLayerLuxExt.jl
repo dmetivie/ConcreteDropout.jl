@@ -63,8 +63,8 @@ Lux.parameterlength(l::ConcreteDropout) = 1
 Lux.statelength(::ConcreteDropout) = 2
 
 function (d::ConcreteDropout)(x, ps, st::NamedTuple)
-    p = sigmoid(ps.p_logit[1])
-    y, _, rng = concrete_dropout(st.rng, x, p, st.training, 1 / (1 - p), eps(eltype(x)), d.temperature, d.dims)
+    p = sigmoid.(ps.p_logit)
+    y, _, rng = concrete_dropout(st.rng, x, p, st.training, 1 ./ (1 .- p), eps(eltype(x)), d.temperature, d.dims)
     return y, merge(st, (; rng))
 end
 
@@ -136,7 +136,7 @@ end
 function _generate_concretedropout_mask(rng::AbstractRNG, x, p, invp, ϵ, temperature; dims)
     realfptype = _dropout_fptype(x)
     y = rand!(rng, similar(x, realfptype, _dropout_shape(x, dims)))
-    y = _concretedropout_kernel.(y, p, ϵ, temperature) * invp
+    y = _concretedropout_kernel.(y, p, ϵ, temperature) .* invp
     return y
 end
 
@@ -155,7 +155,7 @@ function get_regularization(model_state)
 end
 
 function get_regularization(ps, p_cd, w_cd)
-  rates = [sigmoid(getproperty(ps, p)[1]) for p in p_cd]
+  rates = [sigmoid.(getproperty(ps, p)) for p in p_cd] # to work on GPU p and rate have to be vector
 
   W = [getproperty(ps, w) for w in w_cd]
 
@@ -233,7 +233,7 @@ input_feature(layer::Conv) = size(layer.weight, ndims(layer.weight) - 1)
   Add the regularization term 
 """
 function computeCD_reg(p, W, K, λp, λW)
-  sum(λW*sum(abs2, W[i])/(1-p[i]) + λp*K[i]*entropy_Bernoulli(p[i]) for i in eachindex(p))
+  sum(λW*sum(abs2, W[i])./(1 .- p[i]) + λp*K[i]*entropy_Bernoulli.(p[i]) for i in eachindex(p)) |> sum
 end
 
 export regularization_infos, getproperty, get_regularization

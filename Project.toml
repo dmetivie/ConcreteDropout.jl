@@ -1,7 +1,7 @@
 name = "ConcreteDropoutLayer"
 uuid = "cefad46e-21aa-447d-abc5-91039c0799ef"
 authors = ["David Métivier <david.metivier@inrae.fr> and contributors"]
-version = "0.0.6"
+version = "0.0.7"
 
 [deps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

@@ -13,7 +13,7 @@ using Random
 using MLUtils: DataLoader
 using StatsBase
 using StatsPlots
-using ConcreteDropoutLayer#v0.0.6
+using ConcreteDropoutLayer
 
 Random.seed!(MersenneTwister(1))
 
