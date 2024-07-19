@@ -155,11 +155,21 @@ function get_regularization(model_state)
 end
 
 function get_regularization(ps, p_cd, w_cd)
-  rates = [sigmoid.(getproperty(ps, p)) for p in p_cd] # to work on GPU p and rate have to be vector
+  rates = get_regularization(ps, p_cd)
 
   W = [getproperty(ps, w) for w in w_cd]
 
   return rates, W
+end
+
+function get_regularization(ps, p_cd)
+  rates = [sigmoid.(getproperty(ps, p)) for p in p_cd] # to work on GPU p and rate have to be vector
+  return rates
+end
+
+function get_regularization(model_state, freeze::Bool)
+  p_cd = regularization_infos(model_state.model, model_state.parameters, model_state.states, freeze)
+  return get_regularization(model_state.parameters, p_cd)
 end
 
 """
@@ -173,6 +183,10 @@ eval(Meta.parse(w_cd[1])) # return a weigth matrix
 """
 function regularization_infos(model_state::Lux.Experimental.TrainState)
   return regularization_infos(model_state.model, model_state.parameters, model_state.states)
+end
+
+function regularization_infos(model_state::Lux.Experimental.TrainState, freeze::Bool)
+  return regularization_infos(model_state.model, model_state.parameters, model_state.states, freeze)
 end
 
 function regularization_infos(model, ps, st)
@@ -197,6 +211,26 @@ function regularization_infos(model, ps, st)
 
   return Meta.parse.(CD_ps_names), w_cd, [input_feature(getproperty(ps, w)) for w in w_cd]
 end
+
+#TODO: this is very lazy multiple dispach for the case you don't care about weigths-> improve
+function regularization_infos(model, ps, st, freeze)
+  CD_layer_names = String[]
+  function print_p_CD(l, ps, st, name)
+      if l isa ConcreteDropout
+          push!(CD_layer_names, name)
+      end
+      return l, ps, st
+  end
+
+  Lux.Experimental.@layer_map print_p_CD model ps st
+  CD_ps_names = replace.(CD_layer_names, "model." => "")
+  CD_ps_names = replace.(CD_ps_names, "layers." => "")
+
+  CD_ps_names = [(string(a, ".p_logit")) for a in CD_ps_names]
+
+  return Meta.parse.(CD_ps_names)
+end
+
 """
     getproperty(object, nested_name::Expr)
 
@@ -235,6 +269,11 @@ input_feature(layer::Conv) = size(layer.weight, ndims(layer.weight) - 1)
 function computeCD_reg(p, W, K, λp, λW)
   sum(λW*sum(abs2, W[i])./(1 .- p[i]) + λp*K[i]*entropy_Bernoulli.(p[i]) for i in eachindex(p)) |> sum
 end
+
+function computeCD_reg(p, K, λp)
+  sum(λp*K[i]*entropy_Bernoulli.(p[i]) for i in eachindex(p)) |> sum
+end
+
 
 export regularization_infos, getproperty, get_regularization
 export computeCD_reg
