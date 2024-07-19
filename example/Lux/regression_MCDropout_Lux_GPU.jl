@@ -176,11 +176,11 @@ md"""
 """
 
 fix_dropout = 0.1
-model_CNN_D = build_model_dropout(Q, D, fix_dropout)
+model_D = build_model_dropout(Q, D, fix_dropout)
 
 #--------------------
 
-@time "Dropout model" model_state_out_D, loss_train_D, loss_val_D = train(model_CNN_D, epochs, data_train, data_test, compute_loss_heteroscedastic; dev = gpu_device())
+@time "Dropout model" model_state_out_D, loss_train_D, loss_val_D = train(model_D, epochs, data_train, data_test, compute_loss_heteroscedastic; dev = gpu_device())
 
 md"""
 ## Concrete Dropout Model
@@ -190,10 +190,10 @@ md"""
 ### Without regularization
 """
 
-model_CNN_CD = build_model_dropout(Q, D)
+model_CD = build_model_dropout(Q, D)
 #---------------------
 
-@time "Concrete Dropout model" model_state_out_CD, loss_train_CD, loss_val_CD = train(model_CNN_CD, epochs, data_train, data_test, compute_loss_heteroscedastic; dev = gpu_device())
+@time "Concrete Dropout model" model_state_out_CD, loss_train_CD, loss_val_CD = train(model_CD, epochs, data_train, data_test, compute_loss_heteroscedastic; dev = gpu_device())
 
 md"""
 ### With regularization
@@ -203,8 +203,8 @@ wr = get_weight_regularizer(n_train, l=1.0f-2, τ=1.0f0)
 dr = get_dropout_regularizer(n_train, τ=1.0f0, cross_entropy_loss=false)
 
 #------------
-p_cd, w_cd, KK = regularization_infos(Lux.Experimental.TrainState(Xoshiro(0), model_CNN_CD, Adam(0.1f0); transform_variables=dev))
-@time "Concrete Dropout model reg" model_state_out_CD_reg, loss_train_CD_reg, loss_val_CD_reg = train(model_CNN_CD, epochs, data_train, data_test, (model, ps, st, xy) -> compute_loss_heteroscedastic_w_reg(model, ps, st, xy, (p_cd, w_cd, KK), dr, wr); dev = gpu_device())
+p_cd, w_cd, KK = regularization_infos(Lux.Experimental.TrainState(Xoshiro(0), model_CD, Adam(0.1f0); transform_variables=dev))
+@time "Concrete Dropout model reg" model_state_out_CD_reg, loss_train_CD_reg, loss_val_CD_reg = train(model_CD, epochs, data_train, data_test, (model, ps, st, xy) -> compute_loss_heteroscedastic_w_reg(model, ps, st, xy, (p_cd, w_cd, KK), dr, wr); dev = gpu_device())
 
 md"""
 # Result
