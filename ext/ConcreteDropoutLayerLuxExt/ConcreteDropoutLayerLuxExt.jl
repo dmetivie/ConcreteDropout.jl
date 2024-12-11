@@ -1,11 +1,13 @@
 # module ConcreteDropoutLayerLuxExt
 using Lux
 using Random
-using Lux.LuxLib: _dropout_fptype, _dropout_shape
-using Lux.LuxCore: replicate
+using LuxLib.Impl: dropout_fptype, dropout_shape
+using LuxCore: replicate
+using Lux.Training: TrainState
+using Functors
 
 """
-    ConcreteDropout(; dims=:)
+    ConcreteDropout(; dims=:, temperature=0.1f0, init_p=(0.1f0, 0.1f0))
 
 `ConcreteDropout` layer as described in [Concrete Dropout paper](https://arxiv.org/pdf/1705.07832.pdf) by Y. Gal et al.
 This layer applies a soft mask to the previous layer i.e. multiply by a number between 0 and 1 in selected `dims`.
@@ -34,28 +36,28 @@ Call [`Lux.testmode`](@ref) to switch to test mode.
 
 See also [`Dropout`](@ref), [`AlphaDropout`](@ref), [`VariationalHiddenDropout`](@ref)
 """
-Lux.@concrete struct ConcreteDropout{T} <: Lux.AbstractExplicitLayer
-    temperature::T
-    dims
-    init_p
+Lux.@concrete struct ConcreteDropout{T} <: Lux.AbstractLuxLayer
+  temperature::T
+  dims
+  init_p
 end
 
 function ConcreteDropout(; dims=:, temperature=0.1f0, init_p=(0.1f0, 0.1f0))
-    ConcreteDropout(temperature, dims, init_p)
+  ConcreteDropout(temperature, dims, init_p)
 end
 
 function Lux.initialstates(rng::AbstractRNG, ::ConcreteDropout)
-    randn(rng)
-    return (rng=Lux.replicate(rng), training=Lux.Val(true))
+  randn(rng)
+  return (rng=Lux.replicate(rng), training=Lux.Val(true))
 end
 
 function Lux.initialparameters(rng::AbstractRNG, layer::ConcreteDropout{T}) where {T}
-    init_min, init_max = layer.init_p
-    init_min = log(init_min) - log(1 - init_min)
-    init_max = log(init_max) - log(1 - init_max)
+  init_min, init_max = layer.init_p
+  init_min = log(init_min) - log(1 - init_min)
+  init_max = log(init_max) - log(1 - init_max)
 
-    p_logit = randn(rng, T, 1) * (init_max - init_min) .+ init_min
-    return (p_logit=p_logit,)
+  p_logit = randn(rng, T, 1) * (init_max - init_min) .+ init_min
+  return (p_logit=p_logit,)
 end
 
 Lux.parameterlength(l::ConcreteDropout) = 1
@@ -63,15 +65,15 @@ Lux.parameterlength(l::ConcreteDropout) = 1
 Lux.statelength(::ConcreteDropout) = 2
 
 function (d::ConcreteDropout)(x, ps, st::NamedTuple)
-    p = sigmoid.(ps.p_logit)
-    y, _, rng = concrete_dropout(st.rng, x, p, st.training, 1 ./ (1 .- p), eps(eltype(x)), d.temperature, d.dims)
-    return y, merge(st, (; rng))
+  p = sigmoid.(ps.p_logit)
+  y, _, rng = concrete_dropout(st.rng, x, p, st.training, 1 ./ (1 .- p), eps(eltype(x)), d.temperature, d.dims)
+  return y, merge(st, (; rng))
 end
 
 function Base.show(io::IO, d::ConcreteDropout)
-    print(io, "ConcreteDropout(")
-    d.dims != Colon() && print(io, ", dims=", d.dims)
-    return print(io, ")")
+  print(io, "ConcreteDropout(")
+  d.dims != Colon() && print(io, ", dims=", d.dims)
+  return print(io, ")")
 end
 
 """
@@ -106,15 +108,15 @@ With ConcreteDropout the Dropout rate is a training variable and no longer an hy
     overfitting." The journal of machine learning research 15.1 (2014): 1929-1958.
 """
 function concrete_dropout(
-    rng::AbstractRNG, x::AbstractArray, p::T, ::Val{true}, invp::T, ϵ, temperature, dims) where {T}
-    rng = replicate(rng)
-    mask = _generate_concretedropout_mask(rng, x, p, invp, ϵ, temperature; dims)
-    return (x .* (mask), mask, rng)
+  rng::AbstractRNG, x::AbstractArray, p::T, ::Val{true}, invp::T, ϵ, temperature, dims) where {T}
+  rng = replicate(rng)
+  mask = _generate_concretedropout_mask(rng, x, p, invp, ϵ, temperature; dims)
+  return (x .* (mask), mask, rng)
 end
 
 function concrete_dropout(
-    rng::AbstractRNG, x::AbstractArray, p::T, ::Val{false}, ::T, ϵ, temperature, dims) where {T}
-    return (x, x, rng)
+  rng::AbstractRNG, x::AbstractArray, p::T, ::Val{false}, ::T, ϵ, temperature, dims) where {T}
+  return (x, x, rng)
 end
 
 # function concrete_dropout(rng::AbstractRNG, x::AbstractArray, ::AbstractArray,
@@ -134,13 +136,14 @@ end
 # end
 
 function _generate_concretedropout_mask(rng::AbstractRNG, x, p, invp, ϵ, temperature; dims)
-    realfptype = _dropout_fptype(x)
-    y = rand!(rng, similar(x, realfptype, _dropout_shape(x, dims)))
-    y = _concretedropout_kernel.(y, p, ϵ, temperature) .* invp
-    return y
+  realfptype = dropout_fptype(x)
+  y = rand!(rng, similar(x, realfptype, dropout_shape(x, dims)))
+  y = _concretedropout_kernel.(y, p, ϵ, temperature) .* invp
+  return y
 end
 
 """
+  _concretedropout_kernel(x, p, ϵ, temperature)
 Relaxation term used as a soft mask in Concete Dropout (z in Eq. 5 of the [paper](https://arxiv.org/pdf/1705.07832.pdf) paper by Y. Gal et al):
 """
 _concretedropout_kernel(x, p, ϵ, temperature) = 1 - sigmoid((log(p + ϵ) - log1p(ϵ - p) + log(x + ϵ) - log1p(ϵ - x)) / temperature)
@@ -149,132 +152,87 @@ _concretedropout_kernel(x, p, ϵ, temperature) = 1 - sigmoid((log(p + ϵ) - log1
 
 #* ## Get regularization terms #TODO: better way to do this? Integrate L2 term inside Optimizer?
 
-function get_regularization(model_state)
-  p_cd, w_cd, K_cd = regularization_infos(model_state)
-  return get_regularization(model_state.parameters, p_cd, w_cd)
-end
-
-function get_regularization(ps, p_cd, w_cd)
-  rates = get_regularization(ps, p_cd)
-
-  W = [getproperty(ps, w) for w in w_cd]
-
-  return rates, W
-end
-
-function get_regularization(ps, p_cd)
-  rates = [sigmoid.(getproperty(ps, p)) for p in p_cd] # to work on GPU p and rate have to be vector
-  return rates
-end
-
-function get_regularization(model_state, freeze::Bool)
-  p_cd = regularization_infos(model_state.model, model_state.parameters, model_state.states, freeze)
-  return get_regularization(model_state.parameters, p_cd)
-end
-
 """
-  regularization_infos(model_state)
-Brut force extract the name of all layers/parameters involved in ConcreteDropout. 
-
+  get_CD_infos(model_state::TrainState)
+  get_CD_infos(model, ps, st)
+Return a tuple with 
+- The `Functors.KeyPath` of all `ConcreteDropout` layers
+- The `Functors.KeyPath` of all layers to which the `ConcreteDropout` layers is applied.
+- The number of input feature of all these layers.
+For now are supported only `Dense` and `Conv` layers. To use another layer just overload `ConcreteDropout.input_feature(layer::TypeOfLayer) = INTEGER`.
 ```julia
-p_cd, w_cd = regularization_infos(model_state)
-eval(Meta.parse(w_cd[1])) # return a weigth matrix
+key_cd, key_layer, feature_layer = get_CD_infos(model_state)
+Lux.Functors.getkeypath(model_state.parameters, key_cd[1]) # return p_logit parameter of the ConcreteDropout
 ``` 
+WARNING: the code base uses under the hood a custom version of [`Lux.Experimental.layer_map`](https://github.com/LuxDL/Lux.jl/blob/1ea272a135ad1ab2f3acc2d570c462434da5c02e/src/contrib/map.jl#L59) (which is already experimental) hence report any bug.
 """
-function regularization_infos(model_state::Lux.Experimental.TrainState)
-  return regularization_infos(model_state.model, model_state.parameters, model_state.states)
+function get_CD_infos(model_state::TrainState)
+  return get_CD_infos(model_state.model, model_state.parameters, model_state.states)
 end
 
-function regularization_infos(model_state::Lux.Experimental.TrainState, freeze::Bool)
-  return regularization_infos(model_state.model, model_state.parameters, model_state.states, freeze)
+function get_CD_infos(model::AbstractLuxLayer)
+  ps, st = Lux.setup(Random.Xoshiro(0), model)
+  return get_CD_infos(model, ps, st)
 end
 
-function regularization_infos(model, ps, st)
-  CD_layer_names = String[]
-  function print_p_CD(l, ps, st, name)
-      if l isa ConcreteDropout
-          push!(CD_layer_names, name)
-      end
-      return l, ps, st
+function get_CD_infos(model, ps, st)
+  CD_names, W_names, W_type = layer_map_with_previous(model, ps, st)
+
+  return CD_names, W_names, input_feature.(W_type)
+end
+
+#TODO: could supress t_layer and t_prev if https://github.com/LuxDL/Lux.jl/issues/1068 is fixed, in that case `getkeypath(model, kp_layer)` gives the types.
+#TODO: moreover the shape of ps.weigth might be enough to distiguish from Dense and Conv without needed type??
+
+function get_key_type!(kp_cd, kp_layer, t_layer, l, ps, st, name, name_prev, t_prev)
+  if l isa ConcreteDropout
+    push!(kp_cd, name)
+    push!(kp_layer, name_prev)
+    push!(t_layer, t_prev)
   end
-
-  Lux.Experimental.@layer_map print_p_CD model ps st
-  CD_ps_names = replace.(CD_layer_names, "model." => "")
-  CD_ps_names = replace.(CD_ps_names, "layers." => "")
-
-  CD_ps_nb = [parse(Int,a[end]) - 1 for a in CD_ps_names]
-  W_ps_names = [string(a[1:end-1], CD_ps_nb[i]) for (i,a) in enumerate(CD_ps_names)]
-  CD_ps_names = [(string(a, ".p_logit")) for a in CD_ps_names]
-  W_ps_names = [(string(a, ".weight")) for a in W_ps_names]
-
-  w_cd = Meta.parse.(W_ps_names)
-
-  return Meta.parse.(CD_ps_names), w_cd, [input_feature(getproperty(ps, w)) for w in w_cd]
+  return l, ps, st
 end
 
-#TODO: this is very lazy multiple dispach for the case you don't care about weigths-> improve
-function regularization_infos(model, ps, st, freeze)
-  CD_layer_names = String[]
-  function print_p_CD(l, ps, st, name)
-      if l isa ConcreteDropout
-          push!(CD_layer_names, name)
-      end
-      return l, ps, st
+function layer_map_with_previous!(kp_cd, kp_layer, t_layer, l, ps, st)
+  kp_prev = KeyPath(1)
+  t_prev = Dense(1 => 1)
+  Lux.Functors.fmap_with_path(l, ps, st; walk=Lux.Experimental.LayerWalkWithPath(), exclude=Lux.Experimental.layer_map_leaf) do kp, layer, ps_, st_
+    l__, ps__, st__ = get_key_type!(kp_cd, kp_layer, t_layer, layer, ps_, st_, kp, kp_prev, t_prev)
+    kp_prev = kp
+    t_prev = layer
+    return l__, ps__, st__ # needed for the code not to error but useless here
   end
-
-  Lux.Experimental.@layer_map print_p_CD model ps st
-  CD_ps_names = replace.(CD_layer_names, "model." => "")
-  CD_ps_names = replace.(CD_ps_names, "layers." => "")
-
-  CD_ps_names = [(string(a, ".p_logit")) for a in CD_ps_names]
-
-  return Meta.parse.(CD_ps_names)
+  return kp_cd, kp_layer, t_layer
 end
 
-"""
-    getproperty(object, nested_name::Expr)
-
-Call getproperty recursively on `object` to extract the value of some
-nested property, as in the following example:
-
-    julia> object = (X = (x = 1, y = 2), Y = 3)
-    julia> getproperty(object, :(X.y))
-    2
-[Code from Anthony Blaom on discourse](https://discourse.julialang.org/t/nested-getproperty-requests/27968)
-"""
-function Base.getproperty(obj, ex::Expr)
-    subex, field = reduce_nested_field(ex)
-    return getproperty(getproperty(obj, subex), field)
-end
-
-# applying the following to `:(a.b.c)` returns `(:(a.b), :c)`
-function reduce_nested_field(ex)
-    ex.head == :. || throw(ArgumentError)
-    tail = ex.args[2]
-    tail isa QuoteNode || throw(ArgumentError)
-    field = tail.value
-    field isa Symbol || throw(ArgmentError)
-    subex = ex.args[1]
-    return (subex, field)
+function layer_map_with_previous(l, ps, st)
+  kp_cd = KeyPath[]
+  kp_layer = KeyPath[]
+  t_layer = AbstractLuxLayer[]
+  layer_map_with_previous!(kp_cd, kp_layer, t_layer, l, ps, st)
 end
 
 #* ## Compute actual reg
 input_feature(W::AbstractArray) = ndims(W) == 2 ? size(W, 2) : size(W, ndims(W) - 1)
-input_feature(layer::Dense) = size(layer.weight, 2)
-input_feature(layer::Conv) = size(layer.weight, ndims(layer.weight) - 1)
+input_feature(layer::Dense) = layer.in_dims
+input_feature(layer::Conv) = layer.in_chs
 
 """
-  Add the regularization term 
+  get_CD_rates(ps, key_cd)
+Return the array of (size one vector) of Concrete Dropout rate. `ps` is the `@NamedTuple` of the model parameters and `key_cd` the keypath (array or no) 
 """
-function computeCD_reg(p, W, K, λp, λW)
-  sum(λW*sum(abs2, W[i])./(1 .- p[i]) + λp*K[i]*entropy_Bernoulli.(p[i]) for i in eachindex(p)) |> sum
-end
+get_CD_rates(ps, key_cd::AbstractArray{<:KeyPath}) = Base.Fix1(Functors.getkeypath, ps).(key_cd) .|> Base.Fix2(getfield, :p_logit) .|> sigmoid
 
-function computeCD_reg(p, K, λp)
-  sum(λp*K[i]*entropy_Bernoulli.(p[i]) for i in eachindex(p)) |> sum
-end
+get_CD_weigths(ps, key_w::AbstractArray{<:KeyPath}) = Base.Fix1(Functors.getkeypath, ps).(key_w) .|> Base.Fix2(getfield, :weight)
 
+"""
+  computeCD_reg(p, W, K, λp, λW)
+Add the regularization term 
+  sum(λW * sum(abs2, W[i]) ./ (1 .- p[i]) + λp * K[i] * entropy_Bernoulli.(p[i]) for i in eachindex(p)) |> sum
+"""
+computeCD_reg(p, W, K, λp, λW) = sum(λW .* sum.(abs2, W)./(1 .- sum.(p)) + λp .* K .* entropy_Bernoulli.(sum.(p)))
 
-export regularization_infos, getproperty, get_regularization
+export TrainState
+export get_CD_infos, get_CD_rates, get_CD_weigths
 export computeCD_reg
 # end
